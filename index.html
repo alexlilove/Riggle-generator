@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Random Riddle (English)</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#7c3aed;--muted:#9aa4bf;color-scheme:dark}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#071028 0%,#071b2a 100%);padding:24px}
+    .card{width:100%;max-width:760px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:28px;box-shadow:0 10px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+    h1{margin:0 0 6px;font-size:20px;color:var(--accent)}
+    p.lead{margin:0 0 18px;color:var(--muted)}
+    .riddle{font-size:20px;line-height:1.4;margin:18px 0;color:#e6eef8;min-height:64px}
+    .answer{margin-top:12px;font-size:18px;color:#cfe7ff;display:none}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+    button{background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.05);color:#e6eef8;padding:10px 14px;border-radius:10px;cursor:pointer}
+    button.primary{background:var(--accent);border:none}
+    button:disabled{opacity:.5;cursor:default}
+    .meta{margin-top:12px;color:var(--muted);font-size:13px}
+    .spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,0.06);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .attribution{margin-top:12px;font-size:13px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Random Riddle</h1>
+    <p class="lead">Fetches a random riddle from the internet in English. Falls back to a local list if needed.</p>
+    <div id="riddleBox">
+      <div id="riddleText" class="riddle">Click "New riddle" to load one.</div>
+      <div id="answerText" class="answer"></div>
+      <div class="controls">
+        <button id="newBtn" class="primary">New riddle</button>
+        <button id="showBtn">Show answer</button>
+        <button id="copyBtn">Copy riddle</button>
+        <div id="loading" style="display:none;margin-left:8px"><span class="spinner"></span></div>
+      </div>
+      <div class="meta" id="meta"></div>
+      <div class="attribution" id="attribution"></div>
+    </div>
+  </div>
+
+  <script>
+    const endpoints = {
+      en: [
+        'https://riddles-api.vercel.app/random',
+        'https://riddles-api.vercel.app/api/random'
+      ]
+    };
+
+    const localRiddles = {
+      en: [
+        {question: "I speak without a mouth and hear without ears. I have nobody, but I come alive with wind. What am I?", answer: "An echo."},
+        {question: "What has keys but can't open locks?", answer: "A piano."}
+      ]
+    };
+
+    const riddleText = document.getElementById('riddleText');
+    const answerText = document.getElementById('answerText');
+    const newBtn = document.getElementById('newBtn');
+    const showBtn = document.getElementById('showBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const loading = document.getElementById('loading');
+    const attribution = document.getElementById('attribution');
+    let current = {question:'', answer:'', source:'local'};
+
+    newBtn.addEventListener('click', () => fetchRandomRiddle());
+    showBtn.addEventListener('click', () => {
+      if (!current.answer) return;
+      if (answerText.style.display === 'none' || answerText.style.display === '') {
+        answerText.style.display = 'block';
+        showBtn.textContent = 'Hide answer';
+      } else {
+        answerText.style.display = 'none';
+        showBtn.textContent = 'Show answer';
+      }
+    });
+
+    async function fetchFromEndpoint(url){
+      const resp = await fetch(url, {cache:'no-store'});
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      let question = data.riddle || data.question || '';
+      let answer = data.answer || '';
+      if (Array.isArray(data) && data.length) {
+        question = data[0].riddle || data[0].question || '';
+        answer = data[0].answer || '';
+      }
+      return {question: question.trim(), answer: answer.trim(), source: url};
+    }
+
+    async function fetchRandomRiddle(){
+      loading.style.display = 'inline-block';
+      newBtn.disabled = true; showBtn.disabled = true; copyBtn.disabled = true;
+      answerText.style.display = 'none';
+      showBtn.textContent = 'Show answer';
+      attribution.textContent = '';
+
+      for (const url of endpoints.en){
+        try{
+          const result = await fetchFromEndpoint(url);
+          if (result.question) {
+            setRiddle(result);
+            finishLoading();
+            return;
+          }
+        }catch(e){continue;}
+      }
+
+      const pick = localRiddles.en[Math.floor(Math.random()*localRiddles.en.length)];
+      setRiddle({...pick, source:'local fallback'});
+      finishLoading();
+    }
+
+    function setRiddle({question, answer, source}){
+      current.question = question;
+      current.answer = answer;
+      current.source = source;
+      riddleText.textContent = question;
+      answerText.textContent = answer;
+      answerText.style.display = 'none';
+      showBtn.textContent = 'Show answer';
+      attribution.textContent = source !== 'local fallback' ? 'Source: ' + source : 'Using local fallback riddles.';
+    }
+
+    function finishLoading(){
+      loading.style.display = 'none';
+      newBtn.disabled = false; showBtn.disabled = false; copyBtn.disabled = false;
+    }
+
+    fetchRandomRiddle();
+  </script>
+</body>
+</html>
